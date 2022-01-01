@@ -1,31 +1,35 @@
 require,"yao_util.i"; // for escapechar
 
+beams_version = 1.0;
+
 gain_ngs = -0.6*[1,1];
 gain_lgs_foc = -0.6*0;
-gain_lgs_fsm = -0.01; //0.6;
+gain_lgs_fsm = -0.1;
 gain_dsm_offload = 0.0002;
 gain_fsm_offload = -0.002;
-field = 0.2; 
 loopfreq = 1000.;
 
 struct node {
-  int id;
-  string name;
-  int path; // sum of 1:ngs, 2:science, 3:lgs 
+  string name; // name of the node
+  int path; // sum of path to which the node pertains
   // 001: ngs = 1
   // 010: lgs = 2
   // 100: science = 4
   // e.g. path=7 ➜ all of science, ngs, lgs
   // path=6 ➜ science and lgs, etc
-  float ttpos(2);
-  float offset(2);
-  float focpos;
-  float ttupdate(2);
-  float focupdate;
-  string action;
+  float offset(2); // offset of the node (useful for off-axis things)
+  string action; // name of a callback function to effect an action
   string type; // "source",nothing or "fp" (focal plane)
-  long plot; // plsys in which it has to be plot
-  float field;
+  long plot; // plsys in which this node has to be plot
+  float ts(2); // perturbation time series parameters: stdev,knee
+  // INTERNAL PARAMETERS (not intended to be messed with)
+  int id; // assigned by init_nodes()
+  float ttpos(2); // current TT position of node
+  float focpos; // current focus position of the node
+  float ttupdate(2); // when updating, diff between previous and current
+  float focupdate; // same for focus
+  pointer tseries; // pointer to time series (perturbation), 2 because X,Y
+  pointer pos_series; // pointer to 2xNit array to receive position versus time. for rms etc 
 };
 
 func winstart(zoom)
@@ -37,15 +41,15 @@ func winstart(zoom)
 }
 // if (!window_exists(1)) winstart;
 
-func init_nodes(void)
+func init_nodes(nit)
 {
   extern nodes,idmax,field;
   nodes = [];
   id = 1;
-  lgs1off = [0.1,0.];
+  lgs1off = [0.3,0.];
   grow,nodes,node(id=id++,name="ngs",path=5);
-  grow,nodes,node(id=id++,name="lgs",ttpos=lgs1off,offset=lgs1off,path=2,action="lgs",plot=1); // LGS launch jitter mirror will drive this
-  grow,nodes,node(id=id++,name="turb",path=7,action="turb",plot=1);
+  grow,nodes,node(id=id++,name="lgs",ttpos=lgs1off,offset=lgs1off,path=2,action="lgs",ts=[0.15,1.],plot=1); // LGS launch jitter mirror will drive this
+  grow,nodes,node(id=id++,name="turb",path=7,action="turb",plot=1,ts=[0.13,1.]);
   grow,nodes,node(id=id++,name="telmount",path=5,plot=1); // LGS are installed on the mount, so mount motion doesn't affect them
   grow,nodes,node(id=id++,name="dsm",path=7,action="dsm",plot=1);
   // grow,nodes,node(id=id++,name="lgs_focus_stage",path=2);
@@ -56,7 +60,16 @@ func init_nodes(void)
   // grow,nodes,node(id=id++,name="sci_objective",path=4);
   // grow,nodes,node(id=id++,name="imager",path=4,type="fp");
   idmax = id-1;
-  field = [0.6,10.,0.1];
+  field = 2*[0.8,10.,0.1];
+  // init time series:
+  for (i=1;i<=idmax;i++) {
+    nodes(i).pos_series = &array(0.,[2,2,nit]);
+    if (anyof(nodes(i).ts)) {
+      nodes(i).tseries = &array(0.,[2,2,nit]);
+      (*nodes(i).tseries)(1,) = gen_time_series(nit,nodes(i).ts(1),nodes(i).ts(2));
+      (*nodes(i).tseries)(2,) = gen_time_series(nit,nodes(i).ts(1),nodes(i).ts(2));
+    }
+  }
 }
 
 func path_match(path1,path2) { return (path1&path2); }
@@ -91,14 +104,14 @@ func propagate_to(id)
 func loop(nit)
 {
   extern nodes;
-  status = init_nodes();
+  status = init_nodes(nit);
   fma;
   for (n=1;n<=nit;n++) {
     for (i=1;i<=idmax;i++) {
       if (nodes(i).type=="fp") propagate_to,i;
       // change state of node id
       if (nodes(i).action) {
-        funcdef(swrite(format="%s %d",nodes(i).action,i));
+        funcdef(swrite(format="%s %d %d",nodes(i).action,i,n));
       }
     }
     if (!plotmode) plotmode=2;
@@ -114,7 +127,13 @@ func loop(nit)
     // nodes_plot,[id_match("turb"),id_match("dsm"),id_match("ngs_wfs")],n;
     // pm,nodes.ttpos;
     // typeReturn;
+    for (i=1;i<=idmax;i++) (*nodes(i).pos_series)(,n) = nodes(i).ttpos;
+    pause,1;
   }
+  for (i=1;i<=idmax;i++) {
+    write,format="%20s rms=(%.3f,%.3f)\n",nodes(i).name,(*nodes(i).pos_series)(1,rms),(*nodes(i).pos_series)(2,rms);
+  }
+
 }
 
 func nodes_plot(ids,it)
@@ -129,40 +148,49 @@ func nodes_plot(ids,it)
 
 func nodes_plot2(ids)
 {
-  fma; dy0 = 0.02;
+  fma; dy0 = 0.02; 
   for (i=1;i<=numberof(ids);i++) {
+    if (nodes(ids(i)).plot==0) continue;
     plsys,nodes(ids(i)).plot;
     tfield = field(nodes(ids(i)).plot);
+    dy0 = tfield/20.;
     limits,-tfield/2,tfield/2,-tfield/2,tfield/2;
-    plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(gruvbox(i)),symbol="o",size=1.0-0.1*i,fill=1;
-    plt,escapechar(nodes(ids(i)).name),0.23,0.83-(i-1)*dy0,color=torgb(gruvbox(i));
+    tsym = "x"; if (nodes(ids(i)).type=="fp") tsym="o";
+    plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(gruvbox(i)),symbol=tsym,width=3,size=1.0-0.05*i,fill=1;
+    plp,tfield/2-i*dy0,-tfield/2+dy0,color=torgb(gruvbox(i)),symbol=tsym,width=3,size=1.0-0.05*i,fill=1;
+    plt,escapechar(nodes(ids(i)).name),-tfield/2+1.6*dy0,tfield/2-(i-0.2)*dy0,color=torgb(gruvbox(i)),tosys=1,justify="LH";
+    // plp,0.83-(i-1)*dy0,0.23,color=torgb(gruvbox(i)),symbol=tsym,width=3,size=1.0-0.05*i,fill=1;
+    // plt,escapechar(nodes(ids(i)).name),0.25,0.83-(i-1)*dy0,color=torgb(gruvbox(i));
   }
 }
 
 // node action functions
-func turb(id)
+func turb(id,it)
 {
   extern nodes;
   // add random walk with spring, in TT:
-  nodes(id).ttupdate = (0.0005*random_n(2)-nodes(id).ttpos*0.0001);
-  nodes(id).ttpos += nodes(id).ttupdate;
+  // nodes(id).ttupdate = (0.0005*random_n(2)-nodes(id).ttpos*0.0001);
+  // nodes(id).ttpos += nodes(id).ttupdate;
+  nodes(id).ttpos = (*nodes(id).tseries)(,it);
   // same in focus:
   nodes(id).focupdate = (0.001*random_n()-nodes(id).focpos*0.0001);
   nodes(id).focpos += nodes(id).focupdate;
 }
 
-func lgs(id)
+func lgs(id,it)
 // add a little bit of jitter too.
 {
   extern nodes;
   // add random walk with spring
-  nodes(id).ttupdate = (0.0005*random_n(2)-(nodes(id).ttpos-nodes(id).offset)*0.0005);
-  nodes(id).ttpos += nodes(id).ttupdate;
+  // nodes(id).ttupdate = (0.0005*random_n(2)-(nodes(id).ttpos-nodes(id).offset)*0.0005);
+  // nodes(id).ttpos += nodes(id).ttupdate;
+  nodes(id).ttpos = (*nodes(id).tseries)(,it);
+  nodes(id).ttpos += nodes(id).offset;
   nodes(id).focupdate = (0.0001*random_n()-nodes(id).focpos*0.00001);
   nodes(id).focpos += nodes(id).focupdate;
 }
 
-func ngs_wfs(id)
+func ngs_wfs(id,it)
 {
   extern nodes;
   // ttpos is the error reported by the ngs wfs
@@ -171,7 +199,7 @@ func ngs_wfs(id)
   nodes(id2).ttpos += gain_ngs*nodes(id).ttpos;
 }
 
-func lgs_wfs(id)
+func lgs_wfs(id,it)
 {
   extern nodes;
   // correct focus with dsm
@@ -182,7 +210,7 @@ func lgs_wfs(id)
   nodes(id2).ttpos += gain_lgs_fsm*(nodes(id).ttpos-nodes(id).offset);
 }
 
-func dsm(id)
+func dsm(id,it)
 // dsm offload to mount
 {
   extern nodes;
@@ -190,7 +218,7 @@ func dsm(id)
   nodes(id2).ttpos += gain_dsm_offload*nodes(id).ttpos;
 }
 
-func lgs_fsm(id)
+func lgs_fsm(id,it)
 // fsm offload to launch jitter mirror
 {
   extern nodes;
@@ -198,7 +226,7 @@ func lgs_fsm(id)
   nodes(id2).ttpos += gain_fsm_offload*nodes(id).ttpos;
 }
 
-func generic(void) { }
+func generic(id,it) { }
 
 func gen_time_series(nit,stdev,knee)
 {
@@ -212,5 +240,5 @@ func gen_time_series(nit,stdev,knee)
   series = float(fft(w,1));
   series = series/series(rms)*stdev;
   series -= avg(series);
-  return series;
+  return series; // float vector with correct statistics
 }
