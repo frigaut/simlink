@@ -1,6 +1,6 @@
 require,"yao_util.i"; // for escapechar
 
-beams_version = 1.0;
+beams_version = 1.1;
 
 gain_ngs = -0.6*[1,1];
 gain_lgs_foc = -0.6*0;
