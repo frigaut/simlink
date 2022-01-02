@@ -1,7 +1,7 @@
 /*******  Beams.i package functions **********/
 require,"yao_util.i"; // for escapechar
 
-beams_version = 1.2;
+beams_version = 1.1;
 
 // Structure declaration
 
