@@ -1,10 +1,12 @@
-/*******  Beams.i package functions **********/
-require,"yao_util.i"; // for escapechar
+/*******  Beams.i package functions **********
+Invoke with, e.g.:
+loop,"mavis-simple.par",500
+*********************************************/
+beams_version = 1.3;
 
-beams_version = 1.1;
+pldefault,dpi=120;
 
 // Structure declaration
-
 struct node {
   string name; // name of the node
   int path; // sum of path to which the node pertains
@@ -15,9 +17,11 @@ struct node {
   // path=6 ➜ science and lgs, etc
   float offset(2); // offset of the node (useful for off-axis things)
   string action; // name of a callback function to effect an action
+  string action_on; // for use in generic function allow to pass which node the action has to apply on
   string type; // "source",nothing or "fp" (focal plane)
-  long plot; // plsys in which this node has to be plot
+  long plot(2); // window and plsys in which this node has to be plot. plsys=0 means no plot.
   float ts(2); // perturbation time series parameters: stdev,knee
+  long delay; // delay in frame for this node
   // INTERNAL PARAMETERS (not intended to be messed with)
   int id; // assigned by init_nodes()
   float ttpos(2); // current TT position of node
@@ -25,7 +29,9 @@ struct node {
   float ttupdate(2); // when updating, diff between previous and current
   float focupdate; // same for focus
   pointer tseries; // pointer to time series (perturbation), 2 because X,Y
-  pointer pos_series; // pointer to 2xNit array to receive position versus time. for rms etc 
+  pointer pos_series; // pointer to 2xNit array to receive positions versus time. for rms etc 
+  pointer off_series; // pointer to 2xNit array to receive offsets versus time. for rms etc 
+  float freqratio; // ratio of control rate for this node wrt to base frequency. e.g. 10 = freq/10
 };
 
 // beams.i function definitions
@@ -41,6 +47,14 @@ func winstart(zoom)
 }
 // if (!window_exists(1)) winstart;
 
+func uniqwid(wid)
+// find unique WID number in list of wid
+{
+  // vector of all requested window ID
+  wid = wid(sort(wid));
+  uwid = _(wid(where(wid(dif))),wid(0));
+  return uwid;
+}
 
 func path_match(path1,path2)
 /* DOCUMENT path_match(path1,path2)
@@ -84,12 +98,13 @@ func loop(parfile,nit)
    statistics. Final printouts.
 */
 {
-  extern nodes;
+  extern nodes,delay_start;
 
   include,parfile,1;
-
+  if (animate_plots) animate,1;
+  mirlimit = 0.;
+  delay_start = delay;
   status = init_nodes(nit);
-  fma;
   // Loop over iterations
   for (n=1;n<=nit;n++) {
     // special events (put offsets changes, etc in there)
@@ -104,57 +119,65 @@ func loop(parfile,nit)
       }
       // fill position series arrays for later statistics
       (*nodes(i).pos_series)(,n) = nodes(i).ttpos;
+      (*nodes(i).off_series)(,n) = nodes(i).offset;
     } // end of loop over nodes
     // Plots
-    if (!plotmode) plotmode=2;
-    if (plotmode==1) nodes_plot,where(nodes.plot),n; \
-    else if (plotmode==2) nodes_plot2,where(nodes.plot),n;
-    pause,delay;
+    nodes_plot,where(nodes.plot(2,)),n;
+    if (delay==-1) hitReturn; else pause,delay;
   }
   for (i=1;i<=idmax;i++) {
     write,format="%20s rms=(%.3f,%.3f)\n",nodes(i).name,(*nodes(i).pos_series)(1,rms),(*nodes(i).pos_series)(2,rms);
   }
-  time_plot,where(nodes.plot);
+  if (animate_plots) animate,0;
+  time_plot,where(nodes.plot(2,));
 }
 
-func nodes_plot(ids,it)
-{
-  k = 0;
-  for (i=1;i<=numberof(ids);i++) {
-    plp,nodes(ids(i)).ttpos(1),it,color=torgb(gruvbox((i-1)%7+1)),symbol="o",size=0.2;
-    // plp,nodes(ids(i)).focpos(1),it,color=torgb(gruvbox((i-1)%7+1)),symbol="x",size=0.2;
-    plt,escapechar(nodes(ids(i)).name),0.10,0.83-0.02*k++,tosys=0,color=torgb(gruvbox((i-1)%7+1));
-  }
-  limits;
-}
 
 func time_plot(ids)
 {
-  // window,1;
-  fma;
+  // window,0;
+  // fma;
   for (i=1;i<=numberof(ids);i++) {
     plg,(*nodes(ids(i)).pos_series)(2,),color=torgb(gruvbox((i-1)%7+1));
-    plt,escapechar(nodes(ids(i)).name),0.10,0.83-0.02*i,tosys=0,color=torgb(gruvbox((i-1)%7+1));
+    plt,escapechar(nodes(ids(i)).name),0.50,0.85-0.02*i,tosys=0,color=torgb(gruvbox((i-1)%7+1)),height=14;
   }
   limits;
   plmargin;
 }
 
-func nodes_plot2(ids,n)
+func nodes_plot(ids,n)
 {
-  fma; dy0 = 0.02; 
+  extern mirlimit;
+  kv = array(0,10); // offset of labels per window
+  uwid = uniqwid(nodes(where(nodes.plot(2,))).plot(1,));
+  if (!animate_plots) for (i=1;i<=numberof(uwid);i++) { window,uwid(i); fma; }
   for (i=1;i<=numberof(ids);i++) {
-    if (nodes(ids(i)).plot==0) continue;
-    plsys,nodes(ids(i)).plot;
-    tfield = field(nodes(ids(i)).plot);
-    dy0 = tfield/20.;
-    limits,-tfield/2,tfield/2,-tfield/2,tfield/2;
-    tsym = "x"; if (nodes(ids(i)).type=="fp") tsym="o";
-    plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=1.0-0.05*i,fill=1;
-    plp,tfield/2-i*dy0,-tfield/2+dy0,color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=1.0-0.05*i,fill=1;
-    plt,escapechar(nodes(ids(i)).name),-tfield/2+1.6*dy0,tfield/2-(i-0.2)*dy0,color=torgb(gruvbox((i-1)%7+1)),tosys=1,justify="LH";
+    win = nodes(ids(i)).plot(1);
+    if (nodes(ids(i)).plot(2)==0) continue;
+    window,win;
+    kv(win)++;
+    plsys,nodes(ids(i)).plot(2);
+    if (nodes(ids(i)).type=="mir") {
+      sp = 0.05; yc = [0+sp,1-sp,1-sp,0+sp]-2*kv(win); xc = [0,0,1,1];
+      plfp,[torgb(gruvbox((i-1)%7+1))],yc,xc*nodes(ids(i)).ttpos(1),[4]
+      plfp,[torgb(gruvbox((i-1)%7+1))],yc-1,xc*nodes(ids(i)).ttpos(2),[4]
+      mirlimit = max(_(mirlimit,abs(nodes(ids(i)).ttpos)));
+      limits; limits,-1.2*mirlimit,1.05*mirlimit;
+      range,-2*kv(win)-1,-1;
+      // xytitles,"arcsec","";
+      plt,escapechar(nodes(ids(i)).name),-1.15*mirlimit,-2*kv(win),color=torgb(gruvbox((i-1)%7+1)),tosys=1,justify="LH",height=14;
+    } else {
+      tfield = field(nodes(ids(i)).plot(1)+1);
+      dy0 = tfield/18.;
+      limits,-tfield/2,tfield/2,-tfield/2,tfield/2;
+      tsym = "x"; if (nodes(ids(i)).type=="fp") tsym="o";
+      plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=0.8,fill=1;
+      plp,tfield/2-kv(win)*dy0+dy0/2.5,-tfield/2+dy0/1.5,color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=0.8,fill=1;
+      plt,escapechar(nodes(ids(i)).name),-tfield/2+1.4*dy0,tfield/2-(kv(win)-0.2)*dy0+dy0/2.5,color=torgb(gruvbox((i-1)%7+1)),tosys=1,justify="LH",height=14;
+    }
     pltitle,swrite(format="Iteration %d",n);
   }
+  if (animate_plots) for (i=1;i<=numberof(uwid);i++) { window,uwid(i); fma; }
 }
 
 
@@ -173,4 +196,25 @@ func gen_time_series(nit,stdev,knee)
   series = series/series(rms)*stdev;
   series -= avg(series);
   return series; // float vector with correct statistics
+}
+
+func escapechar(s)
+{
+  s=streplace(s,strfind("_",s,n=20),"!_");
+  s=streplace(s,strfind("^",s,n=20),"!^");
+  return s;
+}
+
+func mrot(ang)
+/* DOCUMENT mrot(angle)
+ * returns the matrix of rotation for a given angle.
+ * It has to be used as follow:
+ * If you want to rotate a vector of two coefficients xy=[x,y],
+ * You should do rotated vector = mrot(+,)*xy(+,);
+ * Angle is in degrees.
+ * SEE ALSO:
+ */
+{
+  dtor=pi/180.;
+  return [[cos(ang*dtor),-sin(ang*dtor)],[sin(ang*dtor),cos(ang*dtor)]];
 }

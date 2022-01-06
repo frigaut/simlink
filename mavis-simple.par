@@ -6,10 +6,10 @@ if (gain_dsm_offload==[])  gain_dsm_offload = 0.001;
 if (gain_fsm_offload==[])  gain_fsm_offload = 0.1;
 if (loopfreq==[])          loopfreq = 1000.;
 if (delay==[])             delay = 1;
-if (field==[])             field = 2*[23,23]; // per window
+if (field==[])             field = 2*[4,5]; // per window
 if (turb_downlink_rms==[]) turb_downlink_rms = 0.13;
 if (turb_uplink_rms==[])   turb_uplink_rms = 0.15;
-lgsradius = 17.5;
+lgsradius = 3.;
 animate_plots = 1;
 
 /**************************************************************/
@@ -45,7 +45,7 @@ func init_nodes(nit)
   scipath = 1;
   ngspath = 2;
   scingspath = scipath+ngspath;
-  nlgs = 8; // works down to 1
+  nlgs = 1; // works down to 1
   lgspath = 2^(1+indgen(nlgs));
   allpaths = scipath+ngspath+sum(lgspath);
 
@@ -64,7 +64,7 @@ func init_nodes(nit)
   grow,nodes,node(id=id++,name="turb",path=allpaths,action="turb",plot=[0,0],ts=[turb_downlink_rms,1.]);
   grow,nodes,node(id=id++,name="telmount",path=scipath+ngspath,type="mir",plot=[1,1]); //,freqratio=50); // LGS are installed on the mount, so mount motion doesn't affect them
   grow,nodes,node(id=id++,name="dsm",path=allpaths,action="dsm",type="mir",plot=[1,1]);
-  // grow,nodes,node(id=id++,name="lgs_focus_stage",path=2);
+  grow,nodes,node(id=id++,name="lgs_focus_stage",path=2);
   for (n=1;n<=nlgs;n++) {
     lgsprefix = swrite(format="lgs%d",n);
     fsmprefix = swrite(format="lgs%d",(n+1)/2*2-1); // this goes 1,1,3,3,5,5,7,7 for 8 LGS

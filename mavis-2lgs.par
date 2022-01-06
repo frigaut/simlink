@@ -3,14 +3,12 @@ if (gain_ngs==[])          gain_ngs = -0.5*[1,1];
 if (gain_lgs_foc==[])      gain_lgs_foc = -0.5*0;
 if (gain_lgs_fsm==[])      gain_lgs_fsm = -0.5;
 if (gain_dsm_offload==[])  gain_dsm_offload = 0.001;
-if (gain_fsm_offload==[])  gain_fsm_offload = 0.001;
+if (gain_fsm_offload==[])  gain_fsm_offload = 0.1;
 if (loopfreq==[])          loopfreq = 1000.;
-if (delay==[])             delay = 1;
+if (delay==[])             delay = 10;
 if (field==[])             field = 2*[5];
 if (turb_downlink_rms==[]) turb_downlink_rms = 0.13;
 if (turb_uplink_rms==[])   turb_uplink_rms = 0.15;
-
-beams_dpi = 120;
 
 /**************************************************************/
 // SPECIAL EVENTS IN TIME SERIES.
@@ -37,20 +35,27 @@ func init_nodes(nit)
   nodes = [];
   id = 1;
 
-  lgs1off = [3.0,0.];
+  lgs1off = [3.0,0.0];
+  lgs2off = [0.0,-3.0];
 
-  grow,nodes,node(id=id++,name="ngs",path=5); // NGS
-  grow,nodes,node(id=id++,name="lgs",path=2,ttpos=lgs1off,offset=lgs1off,action="lgs",plot=[1,1]); // LGS, including possible offsets
-  grow,nodes,node(id=id++,name="lgsf_fm",path=2,plot=[1,1]); // LGS launch jitter mirror 
-  grow,nodes,node(id=id++,name="lgs_uplink",path=2,action="lgs_uplink",ts=[turb_uplink_rms,1.]); // LGS uplink turb
-  grow,nodes,node(id=id++,name="turb",path=7,action="turb",plot=[0,1],ts=[turb_downlink_rms,1.]);
-  grow,nodes,node(id=id++,name="telmount",path=5,plot=[0,1]); // LGS are installed on the mount, so mount motion doesn't affect them
-  grow,nodes,node(id=id++,name="dsm",path=7,action="dsm",plot=[0,1]);
+  // paths: 1=science, 2=ngs, 4=lgs1, 8=lgs2
+  grow,nodes,node(id=id++,name="ngs",path=3); // NGS
+  grow,nodes,node(id=id++,name="lgs1",path=4,ttpos=lgs1off,offset=lgs1off,action="lgs",plot=1); // LGS, including possible offsets
+  grow,nodes,node(id=id++,name="lgsf1_fm",path=4,plot=1); // LGS launch jitter mirror 
+  grow,nodes,node(id=id++,name="lgs1_uplink",path=4,action="lgs_uplink",ts=[turb_uplink_rms,1.],plot=1); // LGS uplink turb
+  grow,nodes,node(id=id++,name="lgs2",path=8,ttpos=lgs2off,offset=lgs2off,action="lgs",plot=1); // LGS, including possible offsets
+  grow,nodes,node(id=id++,name="lgsf2_fm",path=8,plot=1); // LGS launch jitter mirror 
+  grow,nodes,node(id=id++,name="lgs2_uplink",path=8,action="lgs_uplink",ts=[turb_uplink_rms,1.],plot=1); // LGS uplink turb
+  grow,nodes,node(id=id++,name="turb",path=7,action="turb",plot=1,ts=[turb_downlink_rms,1.]);
+  grow,nodes,node(id=id++,name="telmount",path=3,plot=1); // LGS are installed on the mount, so mount motion doesn't affect them
+  grow,nodes,node(id=id++,name="dsm",path=7,action="dsm",plot=1);
   // grow,nodes,node(id=id++,name="lgs_focus_stage",path=2);
-  grow,nodes,node(id=id++,name="lgs_fsm",path=2,plot=[1,1],action="lgs_fsm");
-  grow,nodes,node(id=id++,name="lgs_wfs",path=2,type="fp",offset=lgs1off,action="lgs_wfs",plot=[1,1]);
+  grow,nodes,node(id=id++,name="lgs1_fsm",path=4,plot=1,action="lgs1_fsm");
+  grow,nodes,node(id=id++,name="lgs1_wfs",path=4,type="fp",offset=lgs1off,action="lgs1_wfs",plot=1);
+  grow,nodes,node(id=id++,name="lgs2_fsm",path=8,plot=1,action="lgs2_fsm");
+  grow,nodes,node(id=id++,name="lgs2_wfs",path=8,type="fp",offset=lgs2off,action="lgs2_wfs",plot=1);
   // grow,nodes,node(id=id++,name="ngs_focus_stage",path=1);
-  grow,nodes,node(id=id++,name="ngs_wfs",path=1,action="ngs_wfs",type="fp",plot=[0,1]);
+  grow,nodes,node(id=id++,name="ngs_wfs",path=2,action="ngs_wfs",type="fp",plot=1);
   // grow,nodes,node(id=id++,name="sci_objective",path=4);
   // grow,nodes,node(id=id++,name="imager",path=4,type="fp");
 
@@ -120,22 +125,37 @@ func ngs_wfs(id,it)
   nodes(id2).ttpos += gain_ngs*(nodes(id).ttpos-nodes(id).offset);
 }
 
-func lgs_fsm(id,it)
+func lgs1_fsm(id,it)
 // fsm offload to launch jitter mirror
 {
   extern nodes;
-  id2 = id_match("lgsf_fm");
+  id2 = id_match("lgsf1_fm");
   nodes(id2).ttpos += gain_fsm_offload*nodes(id).ttpos;
 }
 
-func lgs_wfs(id,it)
+func lgs2_fsm(id,it)
+// fsm offload to launch jitter mirror
+{
+  extern nodes;
+  id2 = id_match("lgsf2_fm");
+  nodes(id2).ttpos += gain_fsm_offload*nodes(id).ttpos;
+}
+
+func lgs1_wfs(id,it)
 {
   extern nodes;
   // correct focus with dsm
-  id2 = id_match("dsm");
-  nodes(id2).focpos += gain_lgs_foc*nodes(id).focpos;
+  // id2 = id_match("dsm");
+  // nodes(id2).focpos += gain_lgs_foc*nodes(id).focpos;
   // correct tt with LGS FSM
-  id2 = id_match("lgs_fsm");
+  id2 = id_match("lgs1_fsm");
+  nodes(id2).ttpos += gain_lgs_fsm*(nodes(id).ttpos-nodes(id).offset);
+}
+
+func lgs2_wfs(id,it)
+{
+  extern nodes;
+  id2 = id_match("lgs2_fsm");
   nodes(id2).ttpos += gain_lgs_fsm*(nodes(id).ttpos-nodes(id).offset);
 }
 
