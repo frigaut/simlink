@@ -109,7 +109,8 @@ Complex scenarii can be built this way, including also slowing down the display 
 - [x] ...and the whole scheme, with offload to the LGSF_FM? (partially done, offload to 1 FSM er couple of lgs done)
 - [x] Split graphics into NGS and LGS? Clearer to understand graphics.
 - [x] Make movie of graphic window when running loop (kinda done, use `wf-recorder -g "$(slurp)"` in bash and select the area of the screen, it starts recording at once so you should be ready to start the yorick job).
-- [x] Nicer graphics, perhaps a GUI?
+- [x] Nicer graphics
+- [ ] A GUI (which is possible in yorick using e.g. a python GUI framework like GTK+Glade or others), would add interesting possibilities, like e.g. being able to really run the simulation like if at the telescope, inducing offsets, changing gains, etc.
 - [ ] Add component various loop frequencies and reaction time - at least put filter on slow component otherwise the offload appears to jump to fast when offloading once in a while large quantities.
 - [ ] Add rotation? link to telescope elevation?
 
