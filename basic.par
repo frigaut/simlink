@@ -1,13 +1,15 @@
 // Define gains and other top level parameters
 gain_ngs = -0.2*[1,1];
 gain_dsm_offload = 0.01;
+turb_downlink_rms = 0.13;
+pldefault,dpi=120;
+// needed in simlink:
 delay = 10; // can be down to 1
 field = [8]; // per window
-turb_downlink_rms = 0.13;
 loopfreq = 1000.;
 animate_plots = 1;
 wrap_series = 0;
-pldefault,dpi=120;
+
 
 /**************************************************************/
 // SPECIAL EVENTS IN TIME SERIES.
