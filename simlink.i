@@ -22,6 +22,7 @@ nodes(id_match("sci_objective")).focpos+=0.2
 *********************************************/
 
 simlink_version = 1.4;
+gruvbox = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
 
 // Structure declaration
 struct node {
@@ -145,8 +146,8 @@ func loop(parfile,nit,init=,end=)
     // fill position series arrays for later statistics
     (*nodes(i).pos_series)(,nn) = nodes(i).ttpos;
     (*nodes(i).poff_series)(,nn) = nodes(i).offset;
-    (*nodes(i).foc_series)(nn) = nodes(i).focpos;
-    (*nodes(i).foff_series)(nn) = nodes(i).foc_offset;
+    if (nodes(i).foc_series) (*nodes(i).foc_series)(nn) = nodes(i).focpos;
+    if (nodes(i).foff_series) (*nodes(i).foff_series)(nn) = nodes(i).foc_offset;
   } // end of loop over nodes
   // Do the plots
   nodes_plot,where(nodes.plot(2,)),nn;
@@ -158,7 +159,7 @@ func loop(parfile,nit,init=,end=)
     after,-; // cancel after calls.
     if (postrun!=[]) status = postrun(); // call postrun function (e.g. movie)
   } else { // we want to continue
-    if (delay==-1) hitReturn; 
+    if (delay==-1) typeReturn; 
     after,max(_(delay,1))*0.001,loop; // call oneself
     nn = (nn%NIT); // handle wrap
     nn++;

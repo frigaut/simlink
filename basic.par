@@ -1,0 +1,96 @@
+// Define gains and other top level parameters
+gain_ngs = -0.2*[1,1];
+gain_dsm_offload = 0.01;
+delay = 10; // can be down to 1
+field = [8]; // per window
+turb_downlink_rms = 0.13;
+loopfreq = 1000.;
+animate_plots = 1;
+wrap_series = 0;
+pldefault,dpi=120;
+
+/**************************************************************/
+// SPECIAL EVENTS IN TIME SERIES.
+/**************************************************************/
+func events(n)
+// n is iteration number in main loop() function
+{
+  extern nodes,delay;
+  if (n>100) nodes(id_match("ngs_wfs")).offset = [1.0,0.0];
+  if ((n>98)&&(n<108)) delay=100; else delay=delay_start;
+}
+
+
+/**************************************************************/
+// DEFINE SYSTEM IN THIS FUNCTION. REFERS TO THE NODE STRUCTURE 
+// DEFINITION IN SIMLINK.I
+/**************************************************************/
+func init_nodes(nit)
+{
+  extern nodes,idmax,field;
+  nodes = [];
+  id = 1;
+
+  // path: 1=science, 2=ngs
+  scipath = 1;
+  ngspath = 2;
+  allpaths = scipath+ngspath;
+
+  grow,nodes,node(id=id++,name="ngs",path=allpaths); // NGS + Science
+  grow,nodes,node(id=id++,name="turb",path=allpaths,action="turb",plot=[0,0],ts=[turb_downlink_rms,1.]);
+  grow,nodes,node(id=id++,name="telmount",path=allpaths,type="mir",plot=[1,1]);
+  grow,nodes,node(id=id++,name="dsm",path=allpaths,action="dsm",type="mir",plot=[1,1]);
+  grow,nodes,node(id=id++,name="ngs_wfs",path=2,action="ngs_wfs",type="fp",delay=2,plot=[0,1]);
+  grow,nodes,node(id=id++,name="sci_objective",ttpos=[0,2.],path=1);
+  grow,nodes,node(id=id++,name="imager",path=1,type="fp",plot=[0,1]);
+
+  idmax = id-1; // don't touch this
+
+  // init time series:
+  for (i=1;i<=idmax;i++) {
+    nodes(i).pos_series = &array(0.,[2,2,nit]);
+    nodes(i).poff_series = &array(0.,[2,2,nit]);
+    if (anyof(nodes(i).ts)) {
+      nodes(i).tt_turb_series = &array(0.,[2,2,nit]);
+      (*nodes(i).tt_turb_series)(1,) = gen_time_series(nit,nodes(i).ts(1),nodes(i).ts(2));
+      (*nodes(i).tt_turb_series)(2,) = gen_time_series(nit,nodes(i).ts(1),nodes(i).ts(2));
+    }
+  }
+}
+
+/**************************************************************/
+// NODE ACTION FUNCTIONS: TURB, LGS, ETC
+/**************************************************************/
+
+func turb(id,it)
+// effect of turbulence - use PSD-based time series precalculated in init_nodes()
+{
+  extern nodes;
+  // add random walk with spring, in TT:
+  nodes(id).ttpos = (*nodes(id).tt_turb_series)(,it);
+}
+
+func dsm(id,it)
+// dsm offload to mount
+{
+  extern nodes;
+  id2 = id_match("telmount");
+  if (nodes(id2).freqratio(1)) {
+    if ((it%nodes(id2).freqratio(1))!=0) return;
+  }
+  nodes(id2).ttpos += gain_dsm_offload*nodes(id).ttpos;
+}
+
+func ngs_wfs(id,it)
+{
+  extern nodes;
+  // ttpos is the error reported by the ngs wfs
+  // let's plug that into the DSM:
+  id2 = id_match("dsm");
+  // nodes(id2).ttpos += gain_ngs*(nodes(id).ttpos-nodes(id).offset);
+  if (nodes(id).delay==0) {
+    nodes(id2).ttpos += gain_ngs*(nodes(id).ttpos-nodes(id).offset);
+  } else {
+    nodes(id2).ttpos += gain_ngs*((*nodes(id).pos_series)(,it-nodes(id).delay)-(*nodes(id).poff_series)(,it-nodes(id).delay));
+  }
+}
