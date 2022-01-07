@@ -34,7 +34,7 @@ struct node {
   float foc_offset; // offset of the node (useful for off-axis things)
   string action; // name of a callback function to effect an action
   string action_on; // for use in generic function allow to pass which node the action has to apply on
-  string type; // "source",nothing or "fp" (focal plane)
+  string type; // "mir", "foc", nothing or "fp" (focal plane)
   long plot(2); // window and plsys in which this node has to be plot. plsys=0 means no plot.
   float ts(2); // TT perturbation time series parameters: stdev,knee
   float fs(2); // Focus perturbation time series parameters: stdev,knee
