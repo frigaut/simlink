@@ -76,7 +76,7 @@ The node structure definition include the following elements that can be defined
 - `nodes.ts` (float): 2 element array with rms of desired random signal, and knee in frequency (in Hertz, usually around 1).
 - `nodes.fs`(float): same for focus.
 - `nodes.offset` and `nodes.foc_offset` (float): respectively 2 element array (tip tilt) and a single scalar value containing the offset. Useful for setting things off-axis, of inducing a focus offset. Mostly useful for "fp". If you want to offset a mirror for instance, you should use 
-  `nodes.ttpos += some value`.
+  `nodes.ttpos += some value`. Note that the meaning of offsets are whatever you are doing with them in the action functions. Offsets are not used in the main simlink functions (in `simlink.i`). The only thing that is done is the propagation step in `simlink.i` is to propagate the `nodes.ttpos` and `nodes.focpos` to `fp` nodes.
 - `nodes.action_on`(string): For use in generic action function (e.g. you can defined a generic "direct the measurements toward a node" and defined the node with action_on). It allows to re-use a function for several elements (e.g. in MAVIS the 8 LGS WFSs) and drastically reduce the length of the code. See example in `mavis.par`.
 
 ### Other useful tricks
