@@ -22,7 +22,11 @@ nodes(id_match("sci_objective")).focpos+=0.2
 *********************************************/
 
 simlink_version = 1.4;
-gruvbox = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
+usercol = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
+usercol = torgb([0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd,0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff]);
+pldefault,edges=1,ecolor=[128,128,128];
+
+ncols = numberof(usercol);
 
 // Structure declaration
 struct node {
@@ -33,6 +37,8 @@ struct node {
   // path=6 ➜ science and lgs, etc, can add ad libitum other e.g. LGS
   float offset(2); // offset of the node (useful for off-axis things)
   float foc_offset; // offset of the node (useful for off-axis things)
+  float limits(2); // + and - limit threshold for ttpos 
+  float foc_limits; // + and - limit threshold for focus
   string action; // name of a callback function to effect an action
   string action_on; // for use in generic function allow to pass which node the action has to apply on
   string type; // "mir", "foc", nothing or "fp" (focal plane)
@@ -54,6 +60,16 @@ struct node {
 };
 
 // Functions definitions
+func init_windows(nwin)
+{
+  extern xglabs;
+  off = -0.05;
+  xglabs = 0.65+off;
+  for (n=1;n<=nwin;n++) {
+    plsplit,1,1,win=n-1,vp=[0.22+off,0.63+off,0.44,0.85];
+  }
+}
+
 
 func id_match(name)
 /* DOCUMENT id_match(name)
@@ -173,7 +189,10 @@ func end_of_loop_stats(void)
 */
 {
   for (i=1;i<=idmax;i++) { // printout some stats
-    write,format="%20s rms=(%.3f,%.3f)\n",nodes(i).name,(*nodes(i).pos_series)(1,rms),(*nodes(i).pos_series)(2,rms);
+    if (nodes(i).foc_series) \
+      write,format="%20s TT rms=(%.3f,%.3f), focus rms=%.3fum\n",nodes(i).name,(*nodes(i).pos_series)(1,10:)(rms),(*nodes(i).pos_series)(2,10:)(rms),(*nodes(i).foc_series)(10:)(rms);
+    else \
+      write,format="%20s TT rms=(%.3f,%.3f)\n",nodes(i).name,(*nodes(i).pos_series)(1,10:)(rms),(*nodes(i).pos_series)(2,10:)(rms);
   }
 }
 
@@ -183,11 +202,26 @@ func time_plot(ids)
    Can be overridden by a user function
 */
 {
+  window,0;
   for (i=1;i<=numberof(ids);i++) {
-    plg,(*nodes(ids(i)).pos_series)(2,),color=torgb(gruvbox((i-1)%7+1));
-    plt,escapechar(nodes(ids(i)).name),0.50,0.85-0.02*i,tosys=0,color=torgb(gruvbox((i-1)%7+1)),height=14;
+    plg,(*nodes(ids(i)).pos_series)(2,),color=torgb(usercol((i-1)%ncols+1)),width=3;
+    plt,escapechar(nodes(ids(i)).name),xglabs,0.85-0.02*i,tosys=0,color=torgb(usercol((i-1)%ncols+1)),height=14;
   }
-  xytitles,"Iteration","arcsec (TT) or micron (focus)",[0.01,0.005];
+  xytitles,"Iteration","TT (arcsec)",[-0.005,0.005];
+  pltitle,"Nodes TT";
+  limits;
+  plmargin;
+
+  if (noneof(nodes.foc_series)) return; 
+  window,1;
+  for (i=1;i<=numberof(ids);i++) {
+    if (nodes(ids(i)).foc_series) {
+      plg,*nodes(ids(i)).foc_series,color=torgb(usercol((i-1)%ncols+1)),width=3;
+      plt,escapechar(nodes(ids(i)).name),xglabs,0.85-0.02*i,tosys=0,color=torgb(usercol((i-1)%ncols+1)),height=14;
+    }
+  }
+  xytitles,"Iteration","Focus (microns)",[-0.005,0.005];
+  pltitle,"Nodes Focus";
   limits;
   plmargin;
 }
@@ -217,26 +251,26 @@ func nodes_plot(ids,n)
       // Note that for most device, this will be tip, tilt and focus
       // the focus appears slightly darker on the plot.
       sp = 0.05; yc = [0+sp,1-sp,1-sp,0+sp]-3*kv(win); xc = [0,0,1,1];
-      plfp,[torgb(gruvbox((i-1)%7+1))],yc,xc*nodes(ids(i)).ttpos(1),[4]
-      plfp,[torgb(gruvbox((i-1)%7+1))],yc-1,xc*nodes(ids(i)).ttpos(2),[4]
-      plfp,[char(torgb(gruvbox((i-1)%7+1))*0.6)],yc-2,xc*nodes(ids(i)).focpos,[4]
+      plfp,[torgb(usercol((i-1)%ncols+1))],yc,xc*nodes(ids(i)).ttpos(1),[4]
+      plfp,[torgb(usercol((i-1)%ncols+1))],yc-0.9,xc*nodes(ids(i)).ttpos(2),[4]
+      plfp,[char(torgb(usercol((i-1)%ncols+1))*0.6)],yc-1.8,xc*nodes(ids(i)).focpos,[4]
       mirlimit = max(_(mirlimit,abs(nodes(ids(i)).ttpos),abs(nodes(ids(i)).focpos)));
       mirlimit *= 0.99999; // leak for when it quiets down.
       limits; limits,-1.2*mirlimit,1.05*mirlimit;
       range,-3*kv(win)-2,-1;
-      xytitles,"arcsec (TT) or microns (Focus)","",[0.,0.005];
-      plt,escapechar(nodes(ids(i)).name),-1.15*mirlimit,-3*kv(win),color=torgb(gruvbox((i-1)%7+1)),tosys=1,justify="LH",height=14;
+      xytitles,"arcsec (TT) or microns (Focus, darker)","",[0.,0.005];
+      plt,escapechar(nodes(ids(i)).name),-1.15*mirlimit,-3*kv(win),color=torgb(usercol((i-1)%ncols+1)),tosys=1,justify="LH",height=14;
     } else {
-      // Plot of TT position at this iteration
+      // Plot of TT or focus position at this iteration
       // Focus appears as a bigger symbol. Nice effect :-)
       tfield = field(nodes(ids(i)).plot(1)+1);
       dy0 = tfield/18.;
       limits,-tfield/2,tfield/2,-tfield/2,tfield/2;
       tsym = "x"; if (nodes(ids(i)).type=="fp") tsym="o";
       ssize = 0.5+abs(nodes(ids(i)).focpos)*10;
-      plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=ssize,fill=1;
-      plp,tfield/2-kv(win)*dy0+dy0/2.5,-tfield/2+dy0/1.5,color=torgb(gruvbox((i-1)%7+1)),symbol=tsym,width=3,size=0.8,fill=1;
-      plt,escapechar(nodes(ids(i)).name),-tfield/2+1.4*dy0,tfield/2-(kv(win)-0.2)*dy0+dy0/2.5,color=torgb(gruvbox((i-1)%7+1)),tosys=1,justify="LH",height=14;
+      plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(usercol((i-1)%ncols+1)),symbol=tsym,width=3,size=ssize,fill=1;
+      plp,tfield/2-kv(win)*dy0+dy0/2.5,-tfield/2+dy0/1.5,color=torgb(usercol((i-1)%ncols+1)),symbol=tsym,width=3,size=0.8,fill=1;
+      plt,escapechar(nodes(ids(i)).name),-tfield/2+1.4*dy0,tfield/2-(kv(win)-0.2)*dy0+dy0/2.5,color=torgb(usercol((i-1)%ncols+1)),tosys=1,justify="LH",height=14;
       xytitles,"arcsec","arcsec",[0.01,0.005];
     }
     pltitle,swrite(format="Iteration %d",n);
