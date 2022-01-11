@@ -21,7 +21,7 @@ Defocus science objective:
 nodes(id_match("sci_objective")).focpos+=0.2
 *********************************************/
 
-simlink_version = 1.4;
+simlink_version = 1.5;
 usercol = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
 usercol = torgb([0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd,0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff]);
 pldefault,edges=1,ecolor=[128,128,128];
