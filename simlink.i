@@ -21,12 +21,15 @@ Defocus science objective:
 nodes(id_match("sci_objective")).focpos+=0.2
 *********************************************/
 
-simlink_version = 1.5;
+simlink_version = 1.6;
 usercol = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
 usercol = torgb([0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd,0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff]);
+usercol = torgb([0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff,0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd]);
 pldefault,edges=1,ecolor=[128,128,128];
 
 ncols = numberof(usercol);
+pldefault,dpi=120; //120
+use_sway = 1;
 
 // Structure declaration
 struct node {
@@ -66,6 +69,17 @@ func init_windows(nwin)
   off = -0.05;
   xglabs = 0.65+off;
   for (n=1;n<=nwin;n++) {
+    winkill,n-1;
+    if (use_sway) {
+      if ((n-1)==0) {
+        system,"swaymsg for_window [class=\"Gist\"] floating disable";
+        system,"swaymsg splitv;";
+      }
+      if ((n-1)==1) {
+        system,"swaymsg splith;";
+      }
+    }
+    // pause,50;
     plsplit,1,1,win=n-1,vp=[0.22+off,0.63+off,0.44,0.85];
   }
 }
@@ -147,7 +161,9 @@ func loop(parfile,nit,init=,end=)
     delay_start = delay; 
     // call the user defined system definition function:
     status = init_nodes(nit);
+    tic,5;
     nn = 1; NIT = nit;
+    // if (!window_exists(0)) init_windows,2;
   }
   // special events (put offsets changes, etc in there)
   events,nn;
@@ -173,6 +189,7 @@ func loop(parfile,nit,init=,end=)
     if (animate_plots) animate,0;
     time_plot,where(nodes.plot(2,)); // Signal vs time plots
     after,-; // cancel after calls.
+    write,format="The %d iterations took %f seconds\n",NIT,tac(5);
     if (postrun!=[]) status = postrun(); // call postrun function (e.g. movie)
   } else { // we want to continue
     if (delay==-1) typeReturn; 
@@ -237,6 +254,7 @@ func nodes_plot(ids,n)
 {
   extern mirlimit;
   kv = array(0,10); // offset of labels per window
+  icolm = icolp = 0;
   uwid = uniqwid(nodes(where(nodes.plot(2,))).plot(1,));
   if (!animate_plots) for (i=1;i<=numberof(uwid);i++) { window,uwid(i); fma; }
   // loop over requested nodes ID
@@ -250,10 +268,11 @@ func nodes_plot(ids,n)
       // Plot type for "devices": will be horizontal bars
       // Note that for most device, this will be tip, tilt and focus
       // the focus appears slightly darker on the plot.
+      icolm++;
       sp = 0.05; yc = [0+sp,1-sp,1-sp,0+sp]-3*kv(win); xc = [0,0,1,1];
-      plfp,[torgb(usercol((i-1)%ncols+1))],yc,xc*nodes(ids(i)).ttpos(1),[4]
-      plfp,[torgb(usercol((i-1)%ncols+1))],yc-0.9,xc*nodes(ids(i)).ttpos(2),[4]
-      plfp,[char(torgb(usercol((i-1)%ncols+1))*0.6)],yc-1.8,xc*nodes(ids(i)).focpos,[4]
+      plfp,[torgb(usercol((icolm-1)%ncols+1))],yc,xc*nodes(ids(i)).ttpos(1),[4]
+      plfp,[torgb(usercol((icolm-1)%ncols+1))],yc-0.9,xc*nodes(ids(i)).ttpos(2),[4]
+      plfp,[char(torgb(usercol((icolm-1)%ncols+1))*0.6)],yc-1.8,xc*nodes(ids(i)).focpos,[4]
       mirlimit = max(_(mirlimit,abs(nodes(ids(i)).ttpos),abs(nodes(ids(i)).focpos)));
       mirlimit *= 0.99999; // leak for when it quiets down.
       limits; limits,-1.2*mirlimit,1.05*mirlimit;
@@ -263,14 +282,15 @@ func nodes_plot(ids,n)
     } else {
       // Plot of TT or focus position at this iteration
       // Focus appears as a bigger symbol. Nice effect :-)
+      icolp++;
       tfield = field(nodes(ids(i)).plot(1)+1);
       dy0 = tfield/18.;
       limits,-tfield/2,tfield/2,-tfield/2,tfield/2;
       tsym = "x"; if (nodes(ids(i)).type=="fp") tsym="o";
       ssize = 0.5+abs(nodes(ids(i)).focpos)*10;
-      plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(usercol((i-1)%ncols+1)),symbol=tsym,width=3,size=ssize,fill=1;
-      plp,tfield/2-kv(win)*dy0+dy0/2.5,-tfield/2+dy0/1.5,color=torgb(usercol((i-1)%ncols+1)),symbol=tsym,width=3,size=0.8,fill=1;
-      plt,escapechar(nodes(ids(i)).name),-tfield/2+1.4*dy0,tfield/2-(kv(win)-0.2)*dy0+dy0/2.5,color=torgb(usercol((i-1)%ncols+1)),tosys=1,justify="LH",height=14;
+      plp,nodes(ids(i)).ttpos(2),nodes(ids(i)).ttpos(1),color=torgb(usercol((icolp-1)%ncols+1)),symbol=tsym,width=3,size=ssize,fill=1;
+      plp,tfield/2-kv(win)*dy0+dy0/2.5,-tfield/2+dy0/1.5,color=torgb(usercol((icolp-1)%ncols+1)),symbol=tsym,width=3,size=0.8,fill=1;
+      plt,escapechar(nodes(ids(i)).name),-tfield/2+1.4*dy0,tfield/2-(kv(win)-0.2)*dy0+dy0/2.5,color=torgb(usercol((icolp-1)%ncols+1)),tosys=1,justify="LH",height=14;
       xytitles,"arcsec","arcsec",[0.01,0.005];
     }
     pltitle,swrite(format="Iteration %d",n);

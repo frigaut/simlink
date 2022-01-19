@@ -1,10 +1,11 @@
 // Define gains and other top level parameters
-gain_ngs = -0.2*[1,1];
-gain_lgs_foc = -0.3;
-gain_lgs_fsm = -0.2;
-gain_dsm_offload = 0.001;
-gain_fsm_offload = 0.002;
-gain_ngs_focus_offload = 0.05;
+init_state = 0;
+gain_ngs = -0.2*[1,1];         gain_ngs_on = init_state;
+gain_lgs_foc = -0.3;           gain_lgs_foc_on = init_state;
+gain_lgs_fsm = -0.2;           gain_lgs_fsm_on = init_state;
+gain_dsm_offload = 0.001;      gain_dsm_offload_on = init_state;
+gain_fsm_offload = 0.002;      gain_fsm_offload_on = init_state;
+gain_ngs_focus_offload = 0.05; gain_ngs_focus_offload_on = init_state;
 loopfreq = 1000.;
 delay = 1;
 field = 2*[10,10]; // per window
@@ -13,9 +14,10 @@ turb_downlink_rms = 0.13*amp;
 turb_uplink_rms = 0.15*amp;
 lgsradius = 5.0;
 animate_plots = 1;
-wrap_series = 0;
-pldefault,dpi=120;
+wrap_series = 1;
 nlgs = 8; // works down to 1
+
+require,"pyk.i";
 
 if (mavis_config=="simple") {
   nlgs = 1;
@@ -85,46 +87,46 @@ func scenario1(n)
   // if (n==long(accel*1100)) nn = long(accel*1100)-600;
   if (n==long(accel*1000)) {
     gain_lgs_foc=gain_lgs_foc_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing LGS loop (Focus)","gain_lgs_foc=",gain_lgs_foc;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing LGS loop (Focus)","gain_lgs_foc=",gain_lgs_foc;
   }
   if (n==long(accel*2000)) {
     gain_lgs_fsm=gain_lgs_fsm_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing LGS stabilisation loop (TT ➜ FSM)","gain_lgs_fsm=",gain_lgs_fsm;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing LGS stabilisation loop (TT ➜ FSM)","gain_lgs_fsm=",gain_lgs_fsm;
   }
   if (n==long(accel*3000)) {
     gain_dsm_offload = gain_dsm_offload_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing DSM offload to telmount","gain_dsm_offload=",gain_dsm_offload;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing DSM TT offload to telmount","gain_dsm_offload=",gain_dsm_offload;
   }
   if (n==long(accel*4000)) {
     gain_fsm_offload = gain_fsm_offload_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing FSM offload to LGSF_FM","gain_fsm_offload=",gain_fsm_offload;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing FSM offload to LGSF_FM","gain_fsm_offload=",gain_fsm_offload;
   }
   if (n==long(accel*5000)) {
     gain_ngs=gain_ngs_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing NGS loop (TT)","gain_ngs=",gain_ngs;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing NGS loop (TT)","gain_ngs=",gain_ngs;
   }
   if (n==long(accel*6000)) {
     gain_ngs_focus_offload = gain_ngs_focus_offload_orig;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Closing NGS focus control of LGS zoom","gain_ngs_focus_offload=",gain_ngs_focus_offload;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Closing NGS focus control of LGS zoom","gain_ngs_focus_offload=",gain_ngs_focus_offload;
   }
   if (n==long(accel*7000)) {
     nodes(id_match("ngs_wfs")).offset = [0,-2.0];
-    write,format="(it %d) %s\n     %s[%.2f,%.2f]\n",n,"Offset of NGS (changing ngs offset)","nodes(id_match(\"ngs_wfs\")).offset=",\
+    write,format="(it %d) %s\n     %s[%.5f,%.5f]\n",n,"Offset of NGS (changing ngs offset)","nodes(id_match(\"ngs_wfs\")).offset=",\
       nodes(id_match("ngs_wfs")).offset(1),nodes(id_match("ngs_wfs")).offset(2);
   }
   if (n==long(accel*8000)) {
     foff = 0.2;
     nodes(id_match("ngs_focus_stage")).focpos+=foff;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Offseting the NGS focus stage (doesn;t exist, but if it did)","nodes(id_match(\"ngs_focus_stage\")).focpos+=",foff;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Offseting the NGS focus stage (doesn;t exist, but if it did)","nodes(id_match(\"ngs_focus_stage\")).focpos+=",foff;
   }
   if (n==long(accel*9000)) {
     foff = 0.2;
     nodes(id_match("sci_objective")).focpos+=foff;
-    write,format="(it %d) %s\n     %s%.2f\n",n,"Refocusing with science objective (only manual operation)","nodes(id_match(\"sci_objective\")).focpos+=",foff;
+    write,format="(it %d) %s\n     %s%.5f\n",n,"Refocusing with science objective (only manual operation)","nodes(id_match(\"sci_objective\")).focpos+=",foff;
   }
 }
 
-events = scenario1;
+// events = scenario1;
 
 /**************************************************************/
 // DEFINE SYSTEM IN THIS FUNCTION. REFERS TO THE NODE STRUCTURE 
@@ -241,7 +243,7 @@ func dsm(id,it)
   if (nodes(id2).freqratio(1)) {
     if ((it%nodes(id2).freqratio(1))!=0) return;
   }
-  nodes(id2).ttpos += gain_dsm_offload*nodes(id).ttpos;
+  nodes(id2).ttpos += gain_dsm_offload*gain_dsm_offload_on*nodes(id).ttpos;
 }
 
 func ngs_wfs(id,it)
@@ -252,16 +254,16 @@ func ngs_wfs(id,it)
   id2 = id_match("dsm");
   // nodes(id2).ttpos += gain_ngs*(nodes(id).ttpos-nodes(id).offset);
   if (nodes(id).delay==0) {
-    nodes(id2).ttpos += gain_ngs*(nodes(id).ttpos-nodes(id).offset);
+    nodes(id2).ttpos += gain_ngs*gain_ngs_on*(nodes(id).ttpos-nodes(id).offset);
   } else {
-    nodes(id2).ttpos += gain_ngs*((*nodes(id).pos_series)(,it-nodes(id).delay)-(*nodes(id).poff_series)(,it-nodes(id).delay));
+    nodes(id2).ttpos += gain_ngs*gain_ngs_on*((*nodes(id).pos_series)(,it-nodes(id).delay)-(*nodes(id).poff_series)(,it-nodes(id).delay));
   }
   // now let's direct focus error toward the LGS zoom
   id2 = id_match("lgs_focus_stage");
   if (nodes(id).delay==0) {
-    nodes(id2).focpos += gain_ngs_focus_offload*(nodes(id).focpos-nodes(id).foc_offset);
+    nodes(id2).focpos += gain_ngs_focus_offload*gain_ngs_focus_offload_on*(nodes(id).focpos-nodes(id).foc_offset);
   } else {
-    nodes(id2).focpos += gain_ngs_focus_offload*((*nodes(id).foc_series)(it-nodes(id).delay)-(*nodes(id).foff_series)(it-nodes(id).delay));
+    nodes(id2).focpos += gain_ngs_focus_offload*gain_ngs_focus_offload_on*((*nodes(id).foc_series)(it-nodes(id).delay)-(*nodes(id).foff_series)(it-nodes(id).delay));
   }
 }
 
@@ -271,7 +273,7 @@ func lgs_fsm(id,it)
   extern nodes;
   id2 = id_match(nodes(id).action_on);
   // write,nodes(id).name,nodes(id2).name;
-  nodes(id2).ttpos += gain_fsm_offload*nodes(id).ttpos;
+  nodes(id2).ttpos += gain_fsm_offload*gain_fsm_offload_on*nodes(id).ttpos;
 }
 
 func lgs_wfs(id,it)
@@ -279,13 +281,39 @@ func lgs_wfs(id,it)
   extern nodes;
   // correct focus with dsm
   id2 = id_match("dsm");
-  nodes(id2).focpos += gain_lgs_foc*nodes(id).focpos;
+  nodes(id2).focpos += gain_lgs_foc*gain_lgs_foc_on*nodes(id).focpos;
   // correct tt with LGS FSM
   id2 = id_match(nodes(id).action_on);
   if (nodes(id).delay==0) {
-    nodes(id2).ttpos += gain_lgs_fsm*(nodes(id).ttpos-nodes(id).offset);
+    nodes(id2).ttpos += gain_lgs_fsm*gain_lgs_fsm_on*(nodes(id).ttpos-nodes(id).offset);
   } else {
-    nodes(id2).ttpos += gain_lgs_fsm*((*nodes(id).pos_series)(,it-nodes(id).delay)-(*nodes(id).poff_series)(,it-nodes(id).delay));
+    nodes(id2).ttpos += gain_lgs_fsm*gain_lgs_fsm_on*((*nodes(id).pos_series)(,it-nodes(id).delay)-(*nodes(id).poff_series)(,it-nodes(id).delay));
   }
 }
 
+// PYTHON GUI CALLBACK FUNCTIONS
+func lgs_offset(lgsn,offset)
+{
+  extern nodes;
+  nodes(id_match("lgs"+totxt(lgsn))).offset += [0.,offset];
+}
+
+func teloffset(xoff,yoff)
+{
+  extern nodes;
+  nodes(id_match("telmount")).ttpos += [xoff,yoff];  
+}
+
+func allloopsreset(void)
+{
+  for (i=1;i<=idmax;i++) {
+    nodes(i).ttpos *= 0;
+    nodes(i).focpos *= 0;
+  }
+  init_nodes,NIT;
+}
+
+python_exec = "./mavis.py";
+pyk_cmd=[python_exec];
+
+if (!_pyk_proc) _pyk_proc = spawn(pyk_cmd, _pyk_callback);
