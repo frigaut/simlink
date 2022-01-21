@@ -80,7 +80,7 @@ func dsm(id,it)
   if (nodes(id2).freqratio(1)) {
     if ((it%nodes(id2).freqratio(1))!=0) return;
   }
-  nodes(id2).ttpos += gain_dsm_offload*nodes(id).ttpos;
+  nodes(id2).go_to += gain_dsm_offload*nodes(id).ttpos;
 }
 
 func ngs_wfs(id,it)

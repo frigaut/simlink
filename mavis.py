@@ -44,12 +44,15 @@ layout = [[sg.Text("Simlink control panel")],
              sg.Input(key='-ngsfocusoffloadgain-',size=(5,1)),
              sg.Button('Open',key='ngsfocusoffloadopen'),
              sg.Button('Close',key='ngsfocusoffloadclose')],
-          [sg.Text("All loops and offloads",size=(19,1)),
+          [sg.Text("All",size=(3,1)),
              sg.Button('Open',key='allloopsopen'),
              sg.Button('Close',key='allloopsclose'),
+             sg.Button('Pause',key='allloopspause'),
+             sg.Button('Resume',key='allloopsresume'),
              sg.Button('Reset',key='allloopsreset')],
           [sg.Text("LGS1"),sg.Button('🡄',key='lgs1left'), sg.Input(key='-offset-',size=(5,1)), sg.Button("🡆",key='lgs1right')],
-          [sg.Text("Telmount"),sg.Button('',key='telleft'),sg.Button('',key='teldown'),sg.Button('',key='telup'),sg.Button('',key='telright'),sg.Input(key='-teloffset-',size=(5,1)), sg.Button("🡆",key='lgs1right')],
+          [sg.Text("Telmount"),sg.Button('',key='telleft'),sg.Button('',key='teldown'),sg.Button('',key='telup'),sg.Button('',key='telright'),sg.Input(key='-teloffset-',size=(5,1))],
+          [sg.Text("NGS WFS"),sg.Button('',key='ngswfsleft'),sg.Button('',key='ngswfsdown'),sg.Button('',key='ngswfsup'),sg.Button('',key='ngswfsright'),sg.Input(key='-teloffset-',size=(5,1))],
           [sg.Button('Quit')]]
 
 # Create the window
@@ -104,6 +107,10 @@ while True:
         py2yo('pyk_set gain_dsm_offload_on 1')
         py2yo('pyk_set gain_fsm_offload_on 1')
         py2yo('pyk_set gain_ngs_focus_offload_on 1')
+    if event == 'allloopspause':
+        py2yo('pyk_set pause_loop 1')
+    if event == 'allloopsresume':
+        py2yo('loop')
     if event == 'allloopsreset':
         py2yo('allloopsreset')
     if event == '-ngsloopgain-_Enter':
@@ -126,6 +133,14 @@ while True:
         py2yo('teloffset 0 -2')
     if event == 'telup':
         py2yo('teloffset 0 +2')
+    if event == 'ngswfsleft':
+        py2yo('ngswfsoffset -2 0')
+    if event == 'ngswfsright':
+        py2yo('ngswfsoffset +2 0')
+    if event == 'ngswfsdown':
+        py2yo('ngswfsoffset 0 -2')
+    if event == 'ngswfsup':
+        py2yo('ngswfsoffset 0 +2')
     if event == 'lgs1left':
         py2yo('lgs_offset 1 -2')
     if event == 'lgs1right':

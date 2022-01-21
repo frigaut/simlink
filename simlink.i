@@ -21,7 +21,7 @@ Defocus science objective:
 nodes(id_match("sci_objective")).focpos+=0.2
 *********************************************/
 
-simlink_version = 1.6;
+simlink_version = 1.7;
 usercol = torgb([0xfb4934,0xb8bb26,0x83a598,0xfe8019,0xb16286,0x8ec07c,0xfabd2f]);
 usercol = torgb([0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd,0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff]);
 usercol = torgb([0xff6188,0xa9dc76,0xffd866,0xfc9867,0xab9df2,0x78dce8,0xffffff,0xff5555,0x50fa7b,0xf1fa8c,0xbd93f9,0xff79c6,0x8be9fd]);
@@ -38,27 +38,29 @@ struct node {
   // 001: science = 1, 010: ngs = 2, 100: lgs = 4
   // e.g. path=7 ➜ all of science, ngs, lgs
   // path=6 ➜ science and lgs, etc, can add ad libitum other e.g. LGS
-  float offset(2); // offset of the node (useful for off-axis things)
+  float offset(2);  // offset of the node (useful for off-axis things)
   float foc_offset; // offset of the node (useful for off-axis things)
-  float limits(2); // + and - limit threshold for ttpos 
+  float limit;     // limit threshold for ttpos (e.g. 3")
+  float go_to(2);   // set point for mechanism
+  float pid(3);     // PID controller parameters for mechanism
   float foc_limits; // + and - limit threshold for focus
-  string action; // name of a callback function to effect an action
+  string action;    // name of a callback function to effect an action
   string action_on; // for use in generic function allow to pass which node the action has to apply on
-  string type; // "mir", "foc", nothing or "fp" (focal plane)
-  long plot(2); // window and plsys in which this node has to be plot. plsys=0 means no plot.
-  float ts(2); // TT perturbation time series parameters: stdev,knee
-  float fs(2); // Focus perturbation time series parameters: stdev,knee
-  long delay; // "Loop" delay in frames for this node. 0 = no delay
-  float freqratio; // ratio of control rate for this node wrt to base frequency. e.g. 10 = freq/10
+  string type;      // "mir", "foc", nothing or "fp" (focal plane)
+  long plot(2);     // window and plsys in which this node has to be plot. plsys=0 means no plot.
+  float ts(2);      // TT perturbation time series parameters: stdev,knee
+  float fs(2);      // Focus perturbation time series parameters: stdev,knee
+  long delay;       // "Loop" delay in frames for this node. 0 = no delay
+  float freqratio;  // ratio of control rate for this node wrt to base frequency. e.g. 10 = freq/10
   // INTERNAL PARAMETERS (not intended to be messed with)
-  int id; // assigned by init_nodes()
-  float ttpos(2); // current TT position of node
-  float focpos; // current focus position of the node
-  pointer tt_turb_series; // pointer to TT time series (perturbation)
+  int id;           // assigned by init_nodes()
+  float ttpos(2);   // current TT position of node
+  float focpos;     // current focus position of the node
+  pointer tt_turb_series;  // pointer to TT time series (perturbation)
   pointer foc_turb_series; // pointer to focus time series (perturbation)
-  pointer pos_series; // pointer to 2xNit array to receive TT positions versus time. for rms etc 
+  pointer pos_series;  // pointer to 2xNit array to receive TT positions versus time. for rms etc 
   pointer poff_series; // pointer to 2xNit array to receive TT offsets versus time. for rms etc 
-  pointer foc_series; // pointer to Nit array to receive focus versus time. for rms etc 
+  pointer foc_series;  // pointer to Nit array to receive focus versus time. for rms etc 
   pointer foff_series; // pointer to Nit array to receive focus offsets versus time. for rms etc 
 };
 
@@ -146,7 +148,7 @@ func loop(parfile,nit,init=,end=)
 */
 {
   extern nodes,delay_start;
-  extern mirlimit,nn,NIT;
+  extern mirlimit,nn,NIT,itv;
 
   if (init) {
     // init things
@@ -155,10 +157,11 @@ func loop(parfile,nit,init=,end=)
     include,parfile,1;
     // possibility to run a prerun function (e.g. to record a movie)
     if (prerun!=[]) status = prerun();
-    if (animate_plots) animate,1;
+    if (animate_plots) for (i=0;i<=1;i++) { window,i; animate,1;}
     mirlimit = 0.; // Just for graphics
     // used to slow or pause display + resume with initial value of delay
     delay_start = delay; 
+    if (itv!=[]) itv *= 0;
     // call the user defined system definition function:
     status = init_nodes(nit);
     tic,5;
@@ -169,6 +172,8 @@ func loop(parfile,nit,init=,end=)
   events,nn;
   // loop over nodes
   for (i=1;i<=idmax;i++) {
+    // process go_to (PID controller) for those mechanism needing it
+    if (anyof(nodes(i).pid)) status=process_go_to(i,nn);
     // propagate to Focal planes
     if (nodes(i).type=="fp") propagate_to,i;
     // callback for node id if actions defined
@@ -180,15 +185,27 @@ func loop(parfile,nit,init=,end=)
     (*nodes(i).poff_series)(,nn) = nodes(i).offset;
     if (nodes(i).foc_series) (*nodes(i).foc_series)(nn) = nodes(i).focpos;
     if (nodes(i).foff_series) (*nodes(i).foff_series)(nn) = nodes(i).foc_offset;
+    // check limits have not been exceeded
+    if (nodes(i).limit==0) continue;
+    if (nodes(i).type=="fp") {
+      if (anyof(abs(nodes(i).ttpos)>nodes(i).limit)) \
+        error,swrite(format="%s lost\n",nodes(i).name);
+    } else {
+      if (anyof(abs(nodes(i).ttpos)>nodes(i).limit)) {
+        write,format="%s at limit\n",nodes(i).name;
+        nodes(i).ttpos = clip(nodes(i).ttpos,-nodes(i).limit,nodes(i).limit);
+      }
+    }
   } // end of loop over nodes
   // Do the plots
   nodes_plot,where(nodes.plot(2,)),nn;
   // handle calling oneself (or not):
-  if ((end)||((!wrap_series)&&(nn==NIT))) { // we want to stop now
-    status = end_of_loop_stats(); // printout some stats
-    if (animate_plots) animate,0;
-    time_plot,where(nodes.plot(2,)); // Signal vs time plots
+  if ((end)||pause_loop||((!wrap_series)&&(nn==NIT))) { // we want to stop now
     after,-; // cancel after calls.
+    if (pause_loop) { pause_loop = 0; return; }
+    status = end_of_loop_stats(); // printout some stats
+    if (animate_plots) for (i=0;i<=1;i++) { window,i; animate,0;}
+    time_plot,where(nodes.plot(2,)); // Signal vs time plots
     write,format="The %d iterations took %f seconds\n",NIT,tac(5);
     if (postrun!=[]) status = postrun(); // call postrun function (e.g. movie)
   } else { // we want to continue
@@ -213,31 +230,64 @@ func end_of_loop_stats(void)
   }
 }
 
+func process_go_to(id,n)
+{
+  extern nodes;
+  extern error_history;
+  extern itv;
+
+  ehdim = 200;
+  if (error_history==[]) {
+    error_history = array(0.,[3,idmax,ehdim,2]);
+    itv = array(0.,[2,2,idmax]); // integral term, all ids
+  }
+  error_history = roll(error_history,[0,-1,0]);
+  // error:
+  error_history(id,0,) = nodes(id).go_to - nodes(id).ttpos;
+  // derivative term
+  dt = error_history(id,0,)-error_history(id,-1,);
+  // integral term
+  // it = (error_history(id,,)*exp(-(indgen(ehdim)/10.)^2)(::-1,))(sum,);
+  it = itv(,id) = itv(,id)+error_history(id,0,);
+  // proportional term
+  pt = error_history(id,0,);
+  // overall correction term:
+  gains = nodes(id).pid;
+  ut = gains(1)*pt + gains(2)*it + gains(3)*pt;
+  // write,n,id,error_history(id,0,),dt,it,pt,ut;
+  // window,2;
+  // pli,error_history(id,,); fma;
+  // hitReturn;
+  // apply it
+  // error_history(,1:ehdim/2,) *= 0;
+  nodes(id).ttpos += ut;
+}
+
 func time_plot(ids)
 /* DOCUMENT time_plot(ids)
    Plot of variables vs time.
    Can be overridden by a user function
 */
 {
-  window,0;
+  window,0; fma;
   for (i=1;i<=numberof(ids);i++) {
-    plg,(*nodes(ids(i)).pos_series)(2,),color=torgb(usercol((i-1)%ncols+1)),width=3;
+    plg,(*nodes(ids(i)).pos_series)(2,),indgen(NIT)/loopfreq,color=torgb(usercol((i-1)%ncols+1)),width=3;
     plt,escapechar(nodes(ids(i)).name),xglabs,0.85-0.02*i,tosys=0,color=torgb(usercol((i-1)%ncols+1)),height=14;
   }
-  xytitles,"Iteration","TT (arcsec)",[-0.005,0.005];
+  xytitles,"Time [s]","TT [arcsec]",[-0.005,0.005];
   pltitle,"Nodes TT";
   limits;
   plmargin;
 
   if (noneof(nodes.foc_series)) return; 
-  window,1;
+  window,1; fma;
   for (i=1;i<=numberof(ids);i++) {
     if (nodes(ids(i)).foc_series) {
-      plg,*nodes(ids(i)).foc_series,color=torgb(usercol((i-1)%ncols+1)),width=3;
+      plg,*nodes(ids(i)).foc_series,indgen(NIT)/loopfreq,color=torgb(usercol((i-1)%ncols+1)),width=3;
       plt,escapechar(nodes(ids(i)).name),xglabs,0.85-0.02*i,tosys=0,color=torgb(usercol((i-1)%ncols+1)),height=14;
     }
   }
-  xytitles,"Iteration","Focus (microns)",[-0.005,0.005];
+  xytitles,"Time [s]","Focus [microns]",[-0.005,0.005];
   pltitle,"Nodes Focus";
   limits;
   plmargin;
@@ -274,7 +324,7 @@ func nodes_plot(ids,n)
       plfp,[torgb(usercol((icolm-1)%ncols+1))],yc-0.9,xc*nodes(ids(i)).ttpos(2),[4]
       plfp,[char(torgb(usercol((icolm-1)%ncols+1))*0.6)],yc-1.8,xc*nodes(ids(i)).focpos,[4]
       mirlimit = max(_(mirlimit,abs(nodes(ids(i)).ttpos),abs(nodes(ids(i)).focpos)));
-      mirlimit *= 0.99999; // leak for when it quiets down.
+      mirlimit *= 0.99996; // leak for when it quiets down.
       limits; limits,-1.2*mirlimit,1.05*mirlimit;
       range,-3*kv(win)-2,-1;
       xytitles,"arcsec (TT) or microns (Focus, darker)","",[0.,0.005];
@@ -320,6 +370,8 @@ func gen_time_series(nit,stdev,knee)
   return series; // float vector with correct statistics
 }
 
+// GENERAL LIBRARY functions
+
 func escapechar(s)
 /* DOCUMENT escapechar(s)
    Returns a string in which the yorick special characters
@@ -344,3 +396,4 @@ func mrot(ang)
   dtor=pi/180.;
   return [[cos(ang*dtor),-sin(ang*dtor)],[sin(ang*dtor),cos(ang*dtor)]];
 }
+

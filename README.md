@@ -73,6 +73,7 @@ The node structure definition include the following elements that can be defined
 - `nodes.plot`(long): two element array containing the window (0,1,...) and the plsys on which you want this node to be plotted. plsys for now can only be 0 (no plot) or 1 (plot). Generally, try to restrict the number of window to a few (I use 2: 0 and 1).
 - `nodes.delay`(long): "loop" delay in integer number of frame. 0: no delay (in reality, one frame delay the way the loop implementation is structured right now).
 - `nodes.freqratio`(long): if larger than one, the action on this node is only effected every freqratio iterations. Not extensively tested.
+- `nodes.pid` defined PID parameters for a given mechanism/mirror. It doesn't make sense to define if for a "fp". The mechanism position (`ttpos`) is then controlled by `nodes.go_to` that should be set to set the desired mechanism/mirror position (instead of modifying `nodes.ttpos`). `nodes.go_to` is then used in a dedicated simlink function (`process_go_to()`) that modify the position of the mirror based on the defined PID, its position history and the `go_to` target. 
 - `nodes.ts` (float): 2 element array with rms of desired random signal, and knee in frequency (in Hertz, usually around 1).
 - `nodes.fs`(float): same for focus.
 - `nodes.offset` and `nodes.foc_offset` (float): respectively 2 element array (tip tilt) and a single scalar value containing the offset. Useful for setting things off-axis, of inducing a focus offset. Mostly useful for "fp". If you want to offset a mirror for instance, you should use 
@@ -116,10 +117,10 @@ https://user-images.githubusercontent.com/613346/148583699-793502a5-4488-463d-a2
 - [x] Add 8 LGSs 
 - [x] ...and the whole scheme, with offload to the LGSF_FM? (partially done, offload to 1 FSM er couple of lgs done)
 - [x] Split graphics into NGS and LGS? Clearer to understand graphics.
-- [x] Make movie of graphic window when running loop (kinda done, use `wf-recorder -g "$(slurp)"` in bash and select the area of the screen, it starts recording at once so you should be ready to start the yorick job).
+- [x] Make movie of graphic window when running loop (I am using the `prerun()` and `postrun()` features to trigger and stop the screen recording, see code).
 - [x] Nicer graphics
-- [ ] A GUI (which is possible in yorick using e.g. a python GUI framework like GTK+Glade or others), would add interesting possibilities, like e.g. being able to really run the simulation like if at the telescope, inducing offsets, changing gains, etc.
-- [ ] Add component various loop frequencies and reaction time - at least put filter on slow component otherwise the offload appears to jump to fast when offloading once in a while large quantities.
+- [x] A GUI (which is possible in yorick using e.g. a python GUI framework like GTK+Glade or others), would add interesting possibilities, like e.g. being able to really run the simulation like if at the telescope, inducing offsets, changing gains, etc. *I have started on this, it is not a very nice GUI, but that will do for now. Not finished implementing all control features though*.
+- [x] Add component various loop frequencies and reaction time - at least put filter on slow component otherwise the offload appears to jump to fast when offloading once in a while large quantities.
 - [ ] Add rotation? link to telescope elevation?
 
 ## Contributors

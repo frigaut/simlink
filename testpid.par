@@ -1,0 +1,46 @@
+// Define gains and other top level parameters
+pldefault,dpi=120;
+// needed in simlink:
+delay = 1; // can be down to 1
+loopfreq = 1000.;
+animate_plots = 1;
+wrap_series = 0;
+field = 2*[10,10]; // per window
+if (pid==[]) pid=[0.01,0.00002,0.001]*0.5;
+
+/**************************************************************/
+// SPECIAL EVENTS IN TIME SERIES.
+/**************************************************************/
+func events(n)
+// n is iteration number in main loop() function
+{
+  extern nodes;
+  nodes(id_match("pidtest")).go_to = [0.0,0.0];
+  if (n>10) nodes(id_match("pidtest")).go_to = [0.0,1.0];
+}
+
+
+/**************************************************************/
+// DEFINE SYSTEM IN THIS FUNCTION. REFERS TO THE NODE STRUCTURE 
+// DEFINITION IN SIMLINK.I
+/**************************************************************/
+func init_nodes(nit)
+{
+  extern nodes,idmax,field;
+  nodes = [];
+  id = 1;
+
+  grow,nodes,node(id=id++,name="ngs",path=1);
+  grow,nodes,node(id=id++,name="pidtest",path=1,pid=pid,type="mir",plot=[1,1]);
+  grow,nodes,node(id=id++,name="wfs",path=1,type="fp",plot=[0,1]);
+
+  idmax = id-1; // don't touch this
+
+  // init time series:
+  for (i=1;i<=idmax;i++) {
+    nodes(i).pos_series = &array(0.,[2,2,nit]);
+    nodes(i).poff_series = &array(0.,[2,2,nit]);
+  }
+
+}
+
